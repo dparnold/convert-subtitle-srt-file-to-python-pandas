@@ -10,38 +10,46 @@ pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', -1)
 
 
-def is_integer(i):
-    try:
-        int(i)
-        return True
-    except ValueError:
-        return False
-
 
 def wordcount_from_srt(filename):
-    with open(filename, 'r', encoding='utf-8', errors='ignore') as f:
+    with open(filename, 'r', encoding='iso-8859-1', errors='replace') as f:
         # it is way faster if you first create a dictionary
         wordcount = {}
         text = ""
         content = f.readlines()
+        replace_list = ['$', '*', '°', "'", '(', ')', '/']
+        forbidden_substrings = ['©', 'ã', "color=", 'â']
         for line in content:
             split = line.split("-->")
             if (not is_integer(line)) and (len(line.split("-->")) == 1) and (line != "\n"):
                 text = text + " " + line
             elif line == "\n":
-                text = text.replace('<i>', '').replace("</i>", '').replace('"', '').replace(',', '').replace('.',
-                                                                                                             '').replace(
-                    '!', '').replace('?', '').replace('-', '').replace("\n", '')
+
+
+                text = text.replace('<i>', '').replace("</i>", '').replace("</b>", '').replace("<b>", '').replace("</font>","").replace("#","").replace(">","").replace("<","").replace(":","").replace('"', '').replace(',', '').replace('.','').replace(
+                    '!', '').replace('?', '').replace('-', '').replace("¿",'').replace("¡","").replace("[","").replace("]","").replace("{","").replace("}","").replace("\n", '')
+                for token in replace_list:
+                    text = text.replace(token,' ')
                 for word in text.split(' '):
                     word = word.lower()
-                    if word == '':
+
+                    problem = False
+                    for substring in forbidden_substrings:
+                        problem = problem or (substring in word)
+                    if (word == '') or (is_integer(word)) or problem:
                         pass
                     elif word in wordcount:
                         wordcount[word] += 1
                     else:
                         wordcount[word] = 1
                 text = ""
-    return wordcount
+    if 'the' in wordcount:
+        if wordcount['the']>15:
+            return wordcount
+        else:
+            return wordcount
+    else:
+        return wordcount
 
 
 def dict_to_pandas(dict):
@@ -50,23 +58,25 @@ def dict_to_pandas(dict):
     for key in dict:
         words.append(key)
         count.append(dict[key])
-    df = pd.DataFrame(count, index=words, columns=['count'])
-    df.sort_values(by='count', inplace=True)
-    print(df)
+    df = pd.DataFrame(list(zip(words, count)), columns=['word', 'count'])
+    df.sort_values(by='count', ascending=True, inplace=True)
+    df = df[df['count']>1]
+    print(df.tail(10000))
     return df
 
 
 def wordcount_from_folder(folder_name):
     outputdict = {}
-    for filename in os.listdir(folder_name):
+    newdict= {}
+    for filename in os.listdir(folder_name)[0:1000]:
         if filename.endswith(".srt"):
             print(filename)
-            newdict = wordcount_from_srt(folder + '/' + filename)
+            newdict = wordcount_from_srt(folder_name + '/' + filename)
             if outputdict != {}:
                 outputdict = merge_dicts(outputdict, newdict)
             else:
                 outputdict = newdict
-        print(outputdict)
+        #print(outputdict)
     return outputdict
 
 
@@ -78,59 +88,19 @@ def merge_dicts(dict1, dict2):
             dict1[key] = dict2[key]
     return dict1
 
+def is_integer(i):
+    try:
+        int(i)
+        return True
+    except ValueError:
+        return False
+
 if __name__ == "__main__":
     start_time = time.time()
 
-    folder = 'srt_files'
+    folder = 'srt'
 
-    dict_to_pandas(wordcount_from_folder(folder))
+    df = dict_to_pandas(wordcount_from_folder(folder))
+    df.to_csv("words.csv")
 
     print("--- %s seconds ---" % (time.time() - start_time))
-
-
-def wordcount_from_srt(filename):
-    with open('srt_files/Importance Of Being Earnest The.srt', 'r', encoding='utf-8', errors='ignore') as f:
-        # it is way faster if you first create a dictionary
-        dict = {'id': [], 'time1': [], 'time2': [], 'text': []}
-        wordcount = {}
-        subtitle_number = 0
-        time1 = 0
-        time2 = 0
-        text = ""
-        counter = 1
-        content = f.readlines()
-
-        for line in content:
-            split = line.split("-->")
-            if is_integer(line):
-                subtitle_number = int(line)
-            elif len(split) > 1:
-                time1 = split[0]
-                time2 = split[1].strip("\n")
-            elif line == "\n":
-                dict['id'].append(subtitle_number)
-                dict['time1'].append(time1)
-                dict['time2'].append(time2)
-                text = text.replace("\n", '')
-                dict['text'].append(text)
-                text = text.replace('<i>', '').replace("</i>", '').replace('"', '').replace(',', '').replace('.',
-                                                                                                             '').replace(
-                    '!', '').replace('?', '').replace('-', '')
-                for word in text.split(' '):
-                    word = word.lower()
-                    if word == '':
-                        pass
-                    elif word in wordcount:
-                        wordcount[word] += 1
-                    else:
-                        wordcount[word] = 1
-                words = []
-                count = []
-                for key in wordcount:
-                    words.append(key)
-                    count.append(wordcount[key])
-                text = ""
-                counter = counter + 1
-            else:
-                text = text + " " + line
-            return
